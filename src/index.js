@@ -74,6 +74,9 @@ async function onClickLoadMore(evt) {
 
     if (pageConst.maxPages !== pageConst.page) {
       addLoadBtn();
+    } else {
+      refs.loadMoreBtn.classList.add('hidden');
+      Notify.info("We're sorry, but you've reached the end of search results.");
     }
   } catch (e) {
     Notify.failure(`Sorry. ${e.message}. Please try again later`);
