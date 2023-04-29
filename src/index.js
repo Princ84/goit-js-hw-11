@@ -1,109 +1,126 @@
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
-import debounce from 'lodash';
-import Notiflix from 'notiflix';
+import { Notify } from 'notiflix/build/notiflix-notify-aio';
+import { getPhoto } from './axios';
+import { pageConst } from './constants';
 
-const input = document.querySelector('.search_input');
-const inputBtn = document.querySelector('.search_btn');
-const gallery = document.querySelector('.gallery');
-const loadMoreBtn = document.querySelector('.load-more');
-const test = document.querySelector('.test');
-
-let page = 1;
-const token = '29544011-a26ad759f9849933fa3601a5e';
-const imageType = 'photo';
-const orientation = 'horizontal';
-const safeSearch = true;
-
-const lightbox = new SimpleLightbox('.gallery a');
-
-loadMoreBtn.setAttribute('hidden', 'hidden');
-
-const fetchImages = async (input, pageNumber) => {
-  const baseUrl = `https://pixabay.com/api/?key=${token}&q=${input}&image_type=${imageType}&orientation=${orientation}&safesearch=${safeSearch}&page=${pageNumber}&per_page=40`;
-
-  const response = await fetch(`${baseUrl}`);
-  const responseObject = await response.json();
-
-  loadMoreBtn.removeAttribute('hidden');
-  return responseObject;
+const refs = {
+  formEl: document.querySelector('#search-form'),
+  galleryEl: document.querySelector('.gallery'),
+  loadMoreBtn: document.querySelector('.load-more'),
 };
 
-const renderImages = images => {
-  const markup = images
+const lightbox = new SimpleLightbox('.gallery a', {
+  scrollZoom: false,
+  captionDelay: 250,
+  overlayOpacity: 0.75,
+});
+
+refs.formEl.addEventListener('submit', onFormElSubmit);
+
+async function onFormElSubmit(evt) {
+  try {
+    evt.preventDefault();
+    pageConst.searchValue = evt.target[0].value;
+    if (!evt.target[0].value.trim()) {
+      return;
+    }
+    refs.loadMoreBtn.classList.add('hidden');
+    pageConst.page = 1;
+    const response = await getPhoto(pageConst.page, pageConst.searchValue);
+
+    if (response.hits.length === 0) {
+      Notify.failure(
+        'Sorry, there are no images matching your search query. Please try again.'
+      );
+      return;
+    }
+    Notify.info(`Total found ${response.totalHits}`);
+    pageConst.maxPages = Math.ceil(response.totalHits / 39);
+    clearGalleryContainer();
+    refs.galleryEl.insertAdjacentHTML(
+      'beforeend',
+      galleryContainerMarkupMaker(response.hits)
+    );
+    lightbox.refresh();
+    if (pageConst.maxPages > pageConst.page) {
+      addLoadBtn();
+    }
+    refs.formEl.reset();
+  } catch (e) {
+    Notify.failure(`Sorry. ${e.message}. Please try again later`);
+  }
+}
+
+async function onClickLoadMore(evt) {
+  try {
+    evt.preventDefault();
+    pageConst.page += 1;
+    removeLoadBtn();
+    const response = await getPhoto(pageConst.page, pageConst.searchValue);
+
+    if (response.hits.length === 0) {
+      Notify.failure(
+        'Sorry, there are no images matching your search query. Please try again.'
+      );
+      return;
+    }
+
+    refs.galleryEl.insertAdjacentHTML(
+      'beforeend',
+      galleryContainerMarkupMaker(response.hits)
+    );
+    lightbox.refresh();
+
+    if (pageConst.maxPages !== pageConst.page) {
+      addLoadBtn();
+    }
+  } catch (e) {
+    Notify.failure(`Sorry. ${e.message}. Please try again later`);
+  }
+}
+
+function galleryContainerMarkupMaker(gallery) {
+  return gallery
     .map(
-      image => `<div class="photo-card">
-  <a href='${image.largeImageURL}'>
-    <img src="${image.webformatURL}" alt="${image.tags}" loading="lazy" />
-  </a>
+      ({
+        webformatURL,
+        largeImageURL,
+        tags,
+        likes,
+        views,
+        comments,
+        downloads,
+      }) =>
+        `<div class="gallery__item">
+  <a href="${largeImageURL}"><img class="gallery__image" src="${webformatURL}" alt="${tags}" loading="lazy"/></a>
   <div class="info">
     <p class="info-item">
-      <b>Likes</b> ${image.likes}
+      <b>Likes</b> ${likes}
     </p>
     <p class="info-item">
-      <b>Views</b> ${image.views}
+      <b>Views</b> ${views}
     </p>
     <p class="info-item">
-      <b>Comments</b> ${image.comments}
+      <b>Comments</b> ${comments}
     </p>
     <p class="info-item">
-      <b>Downloads</b> ${image.downloads}
+      <b>Downloads</b> ${downloads}
     </p>
   </div>
 </div>`
     )
     .join('');
+}
 
-  if (page === 1) {
-    gallery.innerHTML = markup;
-  } else {
-    gallery.insertAdjacentHTML('beforeend', markup);
-  }
-  return page++;
-};
-
-inputBtn.addEventListener('click', async event => {
-  event.preventDefault();
-
-  page = 1;
-  const inputValue = input.value.trim();
-
-  try {
-    const array = await fetchImages(inputValue, page);
-    const arrayImages = [];
-    array.hits.forEach(async image => {
-      arrayImages.push(image);
-    });
-
-    const total = await array.totalHits;
-
-    if (total > 0) {
-      Notiflix.Notify.success(`Hooray! We found ${total} images.`);
-    }
-    if (total === 0) {
-      throw new Error();
-    }
-    renderImages(arrayImages);
-    lightbox.refresh();
-  } catch (error) {
-    gallery.innerHTML = '';
-    Notiflix.Notify.failure(
-      'Sorry, there are no images matching your search query. Please try again.'
-    );
-  }
-});
-
-loadMoreBtn.addEventListener('click', async () => {
-  const inputValue = input.value.trim();
-  try {
-    const array = await fetchImages(inputValue, page);
-    const arrayImages = [];
-    array.hits.forEach(async image => {
-      arrayImages.push(image);
-    });
-    renderImages(arrayImages);
-    lightbox.refresh();
-  } catch (error) {
-    console.log(error.message);
-  }
-});
+function clearGalleryContainer() {
+  refs.galleryEl.innerHTML = '';
+}
+function removeLoadBtn() {
+  refs.loadMoreBtn.classList.add('hidden');
+  refs.loadMoreBtn.removeEventListener('click', onClickLoadMore);
+}
+function addLoadBtn() {
+  refs.loadMoreBtn.classList.remove('hidden');
+  refs.loadMoreBtn.addEventListener('click', onClickLoadMore);
+}

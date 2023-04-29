@@ -8,17 +8,17 @@
     <script type="module" src="./index.js"></script>
   </head>
   <body>
-   <form class="search-form" id="search-form">
+    <form class="search-form" id="search-form">
       <input
+        class="search-input"
         type="text"
         name="searchQuery"
         autocomplete="off"
         placeholder="Search images..."
       />
-      <button type="submit">&#x1F50E;&#xFE0E;</button>
+      <button class="search-btn" type="submit">Search</button>
     </form>
-    <div class="gallery">
-      <!-- Obraz karty -->
-    </div>
+    <div class="gallery"></div>
+    <button type="button" class="load-more hidden">Load more</button>
   </body>
 </html>
